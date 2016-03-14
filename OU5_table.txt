@@ -1,0 +1,1 @@
+./Debug/main.c.o ./Debug/dlist.c.o ./Debug/PDA.c.o ./Debug/stack_1cell.c.o ./Debug/table.c.o   
