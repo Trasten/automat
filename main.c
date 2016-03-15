@@ -1,64 +1,79 @@
 #include <stdio.h>
 #include <string.h>
 #include "PDA.h"
+#include <math.h>
+#include "dlist.h"
 
 bool isDigit(char c);
 bool isOperator(char c);
 bool isSpace(char c);
+bool isIncorrect(char c);
+void pushToStack(automatic* a);
+void addDigitToExistingDigit(automatic* a);
+void removeTwoValuesFromStack(automatic* a);
 
 int main(int argc, char **argv)
 {
-	printf("HHEHEHEHEHEHE\n");
+	if(argc <= 1){
+		printf("To few arguments.\n");
+		return 0;
+	}
 	int inputsize = 0;
 	char* input = argv[1];
 	while(input[inputsize] != '\0'){
 		inputsize++;
 	}
-	automatic* test = PDA_create();
-	char lek[3] = "q0";
-	char lek2[3] = "q1";
-	char lek3[3] = "aa";
 	
-	//strncpy(lek, lek2, strlen(lek2));
-	//printf("%s\n", lek);
-	//printf("%d\n", (int)strlen(lek2));
-	//printf("%d\n", strlen(lek));
-	//printf("%d\n", strlen(lek3));
+	automatic* calculator = PDA_create();
+	char q0[10] = "q0";
+	char opera[10] = "q1";
+	char digit[10] = "q2";
+	char space[10] = "q3";
+	char fail[10] = "q4";
 	
-	PDA_setState(test, lek);
-	PDA_setState(test, lek2);
-	PDA_setState(test, lek3);
-	//PDA_setAcceptState(test, lek);
-	PDA_setAcceptState(test, lek2);
-	PDA_setStartState(test, lek);
-	trans_control* lekis = &isDigit;
+	dlist* states = dlist_empty();
+	dlist_insert(states, dlist_first(states), q0);
+	dlist_insert(states, dlist_first(states), opera);
+	dlist_insert(states, dlist_first(states), digit);
+	dlist_insert(states, dlist_first(states), space);
+	dlist_insert(states, dlist_first(states), fail);
 	
-	PDA_addTransFunc(test, lek, lek2, lekis);
-	//PDA_addTransFunc(test, lek, lek2, &isSpace);
-	PDA_addTransFunc(test, lek, lek2, &isOperator);
+	PDA_setState(calculator, q0);
+	PDA_setState(calculator, opera);
+	PDA_setState(calculator, digit);
+	PDA_setState(calculator, space);
+	PDA_setState(calculator, fail);
 	
-	state* lekis2 = table_lookup(test->t, lek2);
+	PDA_setStartState(calculator, q0);
 	
-	transition* lekis3;
+	PDA_setAcceptState(calculator, digit);
+	PDA_setAcceptState(calculator, opera);
+	PDA_setAcceptState(calculator, space);
 	
-	//lekis3 = dlist_inspect(lekis2->transitions, dlist_first(lekis2->transitions));
+	PDA_addTransFunc(calculator, q0, fail, &isOperator, &removeTwoValuesFromStack);
+	PDA_addTransFunc(calculator, q0, digit, &isDigit, &pushToStack);
+	PDA_addTransFunc(calculator, q0, space, &isSpace, NULL);
+	PDA_addTransFunc(calculator, q0, fail, &isIncorrect, NULL);
 	
-	//printf("%s\n", lekis3->to);
-	PDA_run(test, lek3, inputsize);
+	PDA_addTransFunc(calculator, digit, digit, &isDigit, &addDigitToExistingDigit);
+	PDA_addTransFunc(calculator, digit, opera, &isOperator, &removeTwoValuesFromStack);
+	PDA_addTransFunc(calculator, digit, space, &isSpace, NULL);
+	PDA_addTransFunc(calculator, digit, fail, &isIncorrect, NULL);
 	
-	printf("%s\n", test->current_state);
-	printf("hello world\n");
-	//PDA_free(test); MÅSTE TESTAS
-	char c = '/';
-	if(isDigit(c)){
-		printf("TESTING1\n");
-	}
-	if(isOperator(c)){
-		printf("TESTING2\n");
-	}
-	if(isSpace(c)){
-		printf("TESTING3\n");
-	}
+	PDA_addTransFunc(calculator, opera, digit, &isDigit, &pushToStack);
+	PDA_addTransFunc(calculator, opera, space, &isSpace, NULL);
+	PDA_addTransFunc(calculator, opera, opera, &isOperator, &removeTwoValuesFromStack);
+	PDA_addTransFunc(calculator, opera, fail, &isIncorrect, NULL);
+	
+	PDA_addTransFunc(calculator, space, digit, &isDigit, &pushToStack);
+	PDA_addTransFunc(calculator, space, space, &isSpace, NULL);
+	PDA_addTransFunc(calculator, space, opera, &isOperator, &removeTwoValuesFromStack);
+	PDA_addTransFunc(calculator, space, fail, &isIncorrect, NULL);
+	
+	PDA_run(calculator, input, inputsize);
+	
+	PDA_freeTransiotionLists(calculator, states);//MÅSTE VALGRIND TESTAS
+	PDA_free(calculator); // MÅSTE VALGRIND TESTAS
 	return 0;
 }
 
@@ -72,7 +87,7 @@ bool isDigit(char c){
 }
 
 bool isOperator(char c){
-	if(c == 42||c==43||c==45||c==47){
+	if(c == 42||c==43||c==45||c==47||c==215||c==247){
 		return true;
 	}
 	else{
@@ -86,5 +101,90 @@ bool isSpace(char c){
 	}
 	else{
 		return false;
+	}
+}
+
+bool isIncorrect(char c){
+	if(!isDigit(c)&&!isOperator(c)&&!isSpace(c)){
+		return true;
+	}
+	else{
+		return false;
+	}
+}
+
+void pushToStack(automatic* a){
+	char* tmp = calloc(sizeof(char), 2);
+	tmp[0] = a->input;
+	tmp[1] = '\0';
+	stack_push(a->s, tmp);
+}
+
+void addDigitToExistingDigit(automatic* a){
+	char* tmp = stack_top(a->s);
+	char* tmp2 = calloc(sizeof(char), strlen(tmp)+2);
+	strncpy(tmp2, tmp, strlen(tmp));
+	tmp2[strlen(tmp)] = a->input;
+	tmp2[strlen(tmp)+1] = '\0';
+	stack_pop(a->s);
+	stack_push(a->s, tmp2);
+}
+
+void removeTwoValuesFromStack(automatic* a){
+	char* tmp = calloc(sizeof(char), 30);
+	char* tmp2 = calloc(sizeof(char), 30);
+	int result = -1;
+	if(!stack_isEmpty(a->s)){
+		strncpy(tmp, stack_top(a->s), strlen(stack_top(a->s))+1);
+		stack_pop(a->s);
+		if(!stack_isEmpty(a->s)){
+			strncpy(tmp2, stack_top(a->s), strlen(stack_top(a->s))+1);
+			stack_pop(a->s);
+			//long int tmp3 = strtol(tmp, &tmp[strlen(tmp)], 10);
+			//printf("LONG INT1 = %ld\n", tmp3);
+			//long int tmp4 = strtol(tmp2, &tmp2[strlen(tmp2)], 10);
+			//printf("LONG INT2 = %ld\n", tmp4);
+			int tmp3 = atoi(tmp); // BYTTE TILL DESSA
+			int tmp4 = atoi(tmp2); //
+			//NÅN JÄVLA SKIT MED ASCII SOM VANLIGT........
+			if(a->input == '*' || a->input == 215){
+				result = tmp4 * tmp3;
+			}
+			else if(a->input == '/'|| a->input == 247){
+				if(tmp3 == 0){
+					printf("ERROR: Divided by zero\n");
+					result = -1;
+				}
+				else{
+				result = tmp4 / tmp3;
+				}
+			}
+			else if(a->input == '-'){
+				result = tmp4 - tmp3;
+			}
+			else{
+				result = tmp4 + tmp3;
+			}
+		}
+	}
+	if(result == -1){
+		free(tmp);
+		free(tmp2);
+		a->input = 'a'; // EN LÖSNIUNG MEN INTE NÖJD ÄNNU
+		PDA_makeTrans(a);
+		return NULL;
+	}
+	else{
+		int nrOfDigits;
+		if(result == 0){
+			nrOfDigits = 1;
+		}
+		else{
+			nrOfDigits = floor (log10 (abs (result))) + 1;
+		}
+		sprintf(tmp, "%d", result);
+		tmp[nrOfDigits+1] = '\0';
+		stack_push(a->s, tmp);
+		free(tmp2);
 	}
 }
